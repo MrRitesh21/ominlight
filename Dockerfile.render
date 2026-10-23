@@ -26,7 +26,8 @@ ENV OMNIROUTE_USE_TURBOPACK="${OMNIROUTE_USE_TURBOPACK}"
 ENV OMNIROUTE_MITM_STUB=1
 ARG OMNIROUTE_BUILD_WORKERS=2
 ENV CIRCLE_NODE_TOTAL=${OMNIROUTE_BUILD_WORKERS}
-ENV NODE_OPTIONS="--max-old-space-size=3584"
+ARG OMNIROUTE_BUILD_MEMORY_MB=6144
+ENV NODE_OPTIONS="--max-old-space-size=${OMNIROUTE_BUILD_MEMORY_MB}"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
@@ -74,6 +75,7 @@ RUN mkdir -p /app/data && chown node:node /app /app/data
 # Standalone application bundle
 COPY --chown=node:node --from=builder /app/.build/next/standalone ./
 COPY --chown=node:node --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+RUN test -f /app/node_modules/better-sqlite3/build/Release/better_sqlite3.node
 COPY --chown=node:node --from=builder /app/scripts/dev/healthcheck.mjs ./healthcheck.mjs
 
 # Render scripts & permission handler
