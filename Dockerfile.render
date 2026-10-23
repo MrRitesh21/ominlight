@@ -1,0 +1,77 @@
+# ── OmniRoute Render Cloud Runner (Optimized for 512MB RAM) ─────────────
+# Specifically tailored for Render Free/Hobby plan:
+# - Low memory footprint: V8 heap clamped to 350MB, --optimize-for-size enabled
+# - Port: 10000 (Render default)
+# - Render PostgreSQL snapshot persistence (never lose data on redeploy)
+# - Keep-alive worker (never sleep)
+
+# ── Base with dependencies ──────────────────────────────────────────────────
+FROM node:26-trixie-slim AS base
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends libsecret-1-0 ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+# ── Builder ────────────────────────────────────────────────────────────────
+FROM base AS builder
+ENV NEXT_TELEMETRY_DISABLED=1
+# Single build worker to fit within low memory budget
+ARG OMNIROUTE_BUILD_WORKERS=1
+ENV CIRCLE_NODE_TOTAL=1
+ENV NODE_OPTIONS="--max-old-space-size=2048 --optimize-for-size"
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package*.json ./
+RUN npm install --ignore-scripts --no-audit --no-fund \
+  && npm rebuild better-sqlite3
+
+COPY . ./
+RUN mkdir -p /app/data \
+  && npm run build
+
+# ── Production Runner (512MB Budget) ───────────────────────────────────────
+FROM base AS runner
+
+LABEL org.opencontainers.image.title="omniroute-render" \
+  org.opencontainers.image.description="OmniRoute AI Proxy optimized for Render 512MB + PostgreSQL"
+
+ENV NODE_ENV=production
+ENV PORT=10000
+ENV HOSTNAME=0.0.0.0
+ENV HOST=0.0.0.0
+
+# 512MB RAM ceiling optimization:
+ENV OMNIROUTE_MEMORY_MB=350
+ENV NODE_OPTIONS="--max-old-space-size=350 --optimize-for-size"
+
+# Render default parameters
+ENV DATA_DIR=/app/data
+ENV KEEP_ALIVE=true
+ENV REQUIRE_API_KEY=false
+ENV OMNIROUTE_MIGRATIONS_DIR=/app/migrations
+
+RUN mkdir -p /app/data && chown node:node /app /app/data
+
+# Standalone application bundle
+COPY --chown=node:node --from=builder /app/.build/next/standalone ./
+COPY --chown=node:node --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --chown=node:node --from=builder /app/scripts/dev/healthcheck.mjs ./healthcheck.mjs
+
+# Render scripts & permission handler
+COPY --chown=node:node scripts/render/ ./scripts/render/
+COPY --chmod=755 scripts/check-permissions.sh /app/check-permissions.sh
+
+EXPOSE 10000
+
+USER node
+ENTRYPOINT ["/app/check-permissions.sh"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD ["node", "healthcheck.mjs"]
+
+CMD ["node", "scripts/render/run-render.mjs"]

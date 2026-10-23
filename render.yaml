@@ -1,0 +1,54 @@
+# Render Blueprint Specification for OmniRoute
+# Optimized for Render Hobby / Free Plan (512MB RAM Compute + Render PostgreSQL)
+#
+# Documentation: https://render.com/docs/blueprint-spec
+
+version: "1"
+
+services:
+  - type: web
+    name: omniroute
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    plan: free # Render Free tier (512MB RAM). Can be set to 'starter' for Hobby plan.
+    region: oregon # Standard fast region: oregon, frankfurt, singapore, ohio
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Memory Optimization for 512MB Compute:
+      # Clamps V8 max heap to 350MB, leaving 162MB headroom for native SQLite & system.
+      - key: OMNIROUTE_MEMORY_MB
+        value: "350"
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=350 --optimize-for-size"
+      
+      # Render networking defaults
+      - key: PORT
+        value: "10000"
+      - key: HOSTNAME
+        value: "0.0.0.0"
+      
+      # Never Sleep Heartbeat: Keep-alive worker pings /api/health every 9 minutes
+      - key: KEEP_ALIVE
+        value: "true"
+      
+      # Access control: Set to true if you want an API key required from the start
+      - key: REQUIRE_API_KEY
+        value: "false"
+
+      # Persistent storage path inside container
+      - key: DATA_DIR
+        value: "/app/data"
+
+      # Connect to Render PostgreSQL to solve the redeploy clear data issue
+      - key: DATABASE_URL
+        fromDatabase:
+          name: omniroute-postgres
+          property: connectionString
+
+databases:
+  - name: omniroute-postgres
+    plan: free # Render Free PostgreSQL Database
+    databaseName: omniroute
+    user: omniroute
+    region: oregon
