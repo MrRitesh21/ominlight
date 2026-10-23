@@ -20,7 +20,7 @@ services:
       - key: OMNIROUTE_MEMORY_MB
         value: "350"
       - key: NODE_OPTIONS
-        value: "--max-old-space-size=350 --optimize-for-size"
+        value: "--max-old-space-size=350"
       
       # Render networking defaults
       - key: PORT

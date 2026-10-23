@@ -116,7 +116,7 @@ async function createWebService(apiKey, ownerId, options, databaseUrl) {
   const envVars = [
     { key: "PORT", value: "10000" },
     { key: "OMNIROUTE_MEMORY_MB", value: "350" },
-    { key: "NODE_OPTIONS", value: "--max-old-space-size=350 --optimize-for-size" },
+    { key: "NODE_OPTIONS", value: "--max-old-space-size=350" },
     { key: "KEEP_ALIVE", value: "true" },
     { key: "REQUIRE_API_KEY", value: "false" },
     { key: "DATA_DIR", value: "/app/data" },

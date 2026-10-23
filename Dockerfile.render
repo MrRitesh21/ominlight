@@ -1,6 +1,6 @@
 # ── OmniRoute Render Cloud Runner (Optimized for 512MB RAM) ─────────────
 # Specifically tailored for Render Free/Hobby plan:
-# - Low memory footprint: V8 heap clamped to 350MB, --optimize-for-size enabled
+# - Low memory footprint: V8 heap clamped to 350MB
 # - Port: 10000 (Render default)
 # - Render PostgreSQL snapshot persistence (never lose data on redeploy)
 # - Keep-alive worker (never sleep)
@@ -17,18 +17,25 @@ RUN apt-get update \
 # ── Builder ────────────────────────────────────────────────────────────────
 FROM base AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
-# Single build worker to fit within low memory budget
 ARG OMNIROUTE_BUILD_WORKERS=1
 ENV CIRCLE_NODE_TOTAL=1
-ENV NODE_OPTIONS="--max-old-space-size=2048 --optimize-for-size"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm install --ignore-scripts --no-audit --no-fund \
-  && npm rebuild better-sqlite3
+COPY open-sse/package.json ./open-sse/package.json
+COPY scripts/build/postinstall.mjs ./scripts/build/postinstall.mjs
+COPY scripts/build/postinstallSupport.mjs ./scripts/build/postinstallSupport.mjs
+COPY scripts/build/native-binary-compat.mjs ./scripts/build/native-binary-compat.mjs
+ENV NPM_CONFIG_LEGACY_PEER_DEPS=true
+
+RUN npm ci --include=optional --no-audit --no-fund --legacy-peer-deps --ignore-scripts \
+  && (cd node_modules/better-sqlite3 \
+      && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --force_build=1) \
+  && test -f node_modules/better-sqlite3/build/Release/better_sqlite3.node
 
 COPY . ./
 RUN mkdir -p /app/data \
@@ -47,7 +54,7 @@ ENV HOST=0.0.0.0
 
 # 512MB RAM ceiling optimization:
 ENV OMNIROUTE_MEMORY_MB=350
-ENV NODE_OPTIONS="--max-old-space-size=350 --optimize-for-size"
+ENV NODE_OPTIONS="--max-old-space-size=350"
 
 # Render default parameters
 ENV DATA_DIR=/app/data

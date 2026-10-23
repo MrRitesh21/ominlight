@@ -81,7 +81,7 @@ test("Render Blueprint: render.yaml exists and defines web service + postgres db
   assert.match(content, /dockerfilePath:\s*\.\/Dockerfile\.render/);
   assert.match(content, /OMNIROUTE_MEMORY_MB/);
   assert.match(content, /350/);
-  assert.match(content, /--optimize-for-size/);
+  assert.match(content, /--max-old-space-size=350/);
   assert.match(content, /KEEP_ALIVE/);
   assert.match(content, /omniroute-postgres/);
   assert.match(content, /DATABASE_URL/);
@@ -92,7 +92,7 @@ test("Render Dockerfile: Dockerfile.render configures 512MB RAM and entrypoint",
   const content = fs.readFileSync("Dockerfile.render", "utf8");
 
   assert.match(content, /OMNIROUTE_MEMORY_MB=350/);
-  assert.match(content, /--optimize-for-size/);
+  assert.match(content, /--max-old-space-size=350/);
   assert.match(content, /PORT=10000/);
   assert.match(content, /scripts\/render\/run-render\.mjs/);
 });

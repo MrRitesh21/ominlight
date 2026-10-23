@@ -35,7 +35,7 @@ process.env.PORT = PORT;
 process.env.OMNIROUTE_MEMORY_MB = MEMORY_MB;
 const existingNodeOptions = process.env.NODE_OPTIONS || "";
 if (!existingNodeOptions.includes("--max-old-space-size")) {
-  process.env.NODE_OPTIONS = `${existingNodeOptions} --max-old-space-size=${MEMORY_MB} --optimize-for-size`.trim();
+  process.env.NODE_OPTIONS = `${existingNodeOptions} --max-old-space-size=${MEMORY_MB}`.trim();
 }
 
 async function main() {
