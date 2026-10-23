@@ -1,6 +1,7 @@
 # ── OmniRoute Render Cloud Runner (Optimized for 512MB RAM) ─────────────
 # Specifically tailored for Render Free/Hobby plan:
-# - Low memory footprint: V8 heap clamped to 350MB
+# - Low memory footprint: V8 heap clamped to 350MB at runtime
+# - Build memory ceiling: Webpack (OMNIROUTE_USE_TURBOPACK=0) prevents 8Gi OOM
 # - Port: 10000 (Render default)
 # - Render PostgreSQL snapshot persistence (never lose data on redeploy)
 # - Keep-alive worker (never sleep)
@@ -17,9 +18,15 @@ RUN apt-get update \
 # ── Builder ────────────────────────────────────────────────────────────────
 FROM base AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
-ARG OMNIROUTE_BUILD_WORKERS=1
-ENV CIRCLE_NODE_TOTAL=1
-ENV NODE_OPTIONS="--max-old-space-size=2048"
+
+# Webpack bundler escape hatch: Turbopack runs in native Rust and consumes >8Gi RAM,
+# triggering Render builder OOM. Webpack runs bounded in Node V8 heap.
+ARG OMNIROUTE_USE_TURBOPACK=0
+ENV OMNIROUTE_USE_TURBOPACK="${OMNIROUTE_USE_TURBOPACK}"
+ENV OMNIROUTE_MITM_STUB=1
+ARG OMNIROUTE_BUILD_WORKERS=2
+ENV CIRCLE_NODE_TOTAL=${OMNIROUTE_BUILD_WORKERS}
+ENV NODE_OPTIONS="--max-old-space-size=3584"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
