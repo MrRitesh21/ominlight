@@ -1,7 +1,7 @@
 # ── OmniRoute Render Cloud Runner (Optimized for 512MB RAM) ─────────────
 # Specifically tailored for Render Free/Hobby plan:
+# - Ultra-Fast Light Mode: Stub heavy frontend UI to build in <1 min and run within 100MB RAM
 # - Low memory footprint: V8 heap clamped to 350MB at runtime
-# - Build memory ceiling: Webpack (OMNIROUTE_USE_TURBOPACK=0) prevents 8Gi OOM
 # - Port: 10000 (Render default)
 # - Render PostgreSQL snapshot persistence (never lose data on redeploy)
 # - Keep-alive worker (never sleep)
@@ -11,7 +11,6 @@ FROM node:26-trixie-slim AS base
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends libsecret-1-0 ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
@@ -19,15 +18,13 @@ RUN apt-get update \
 FROM base AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Webpack bundler escape hatch: Turbopack runs in native Rust and consumes >8Gi RAM,
-# triggering Render builder OOM. Webpack runs bounded in Node V8 heap.
-ARG OMNIROUTE_USE_TURBOPACK=0
-ENV OMNIROUTE_USE_TURBOPACK="${OMNIROUTE_USE_TURBOPACK}"
+# Ultra-Fast Light Mode: Stub heavy frontend UI dashboard, compiling only the backend AI Proxy API
+ENV OMNIROUTE_BUILD_BACKEND_ONLY=1
+ENV OMNIROUTE_USE_TURBOPACK=0
 ENV OMNIROUTE_MITM_STUB=1
-ARG OMNIROUTE_BUILD_WORKERS=2
-ENV CIRCLE_NODE_TOTAL=${OMNIROUTE_BUILD_WORKERS}
-ARG OMNIROUTE_BUILD_MEMORY_MB=6144
-ENV NODE_OPTIONS="--max-old-space-size=${OMNIROUTE_BUILD_MEMORY_MB}"
+ARG OMNIROUTE_BUILD_WORKERS=1
+ENV CIRCLE_NODE_TOTAL=1
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
@@ -42,12 +39,12 @@ ENV NPM_CONFIG_LEGACY_PEER_DEPS=true
 
 RUN npm ci --include=optional --no-audit --no-fund --legacy-peer-deps --ignore-scripts \
   && (cd node_modules/better-sqlite3 \
-      && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --force_build=1) \
+      && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --jobs=max --force_build=1) \
   && test -f node_modules/better-sqlite3/build/Release/better_sqlite3.node
 
 COPY . ./
 RUN mkdir -p /app/data \
-  && npm run build
+  && npm run build:backend
 
 # ── Production Runner (512MB Budget) ───────────────────────────────────────
 FROM base AS runner
