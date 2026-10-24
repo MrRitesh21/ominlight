@@ -24,7 +24,7 @@ ENV OMNIROUTE_USE_TURBOPACK=0
 ENV OMNIROUTE_MITM_STUB=1
 ARG OMNIROUTE_BUILD_WORKERS=1
 ENV CIRCLE_NODE_TOTAL=1
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_OPTIONS="--max-old-space-size=5120"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
