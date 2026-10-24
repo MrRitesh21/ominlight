@@ -1,57 +1,19 @@
-# ── OmniRoute Render Cloud Runner (Optimized for 512MB RAM) ─────────────
-# Specifically tailored for Render Free/Hobby plan:
-# - Ultra-Fast Light Mode: Stub heavy frontend UI to build in <1 min and run within 100MB RAM
-# - Low memory footprint: V8 heap clamped to 350MB at runtime
-# - Port: 10000 (Render default)
-# - Render PostgreSQL snapshot persistence (never lose data on redeploy)
-# - Keep-alive worker (never sleep)
+# ── OmniRoute Render Cloud Runner (Ultra-Fast <30s Deploy) ───────────────
+# Uses official pre-compiled OmniRoute production standalone image as base:
+# - Zero compilation on Render: eliminates builder OOM crashes entirely
+# - Ultra-fast deployment: deploys in ~20-30 seconds instead of 6+ minutes
+# - 512MB RAM optimization: clamps V8 heap to 350MB at runtime
+# - Render PostgreSQL persistence: restores SQLite on boot, snapshots every 2m
+# - Keep-alive worker: pings health endpoint every 9m to prevent idle sleep
+# - Full Web Dashboard UI & all 375 AI providers included
 
-# ── Base with dependencies ──────────────────────────────────────────────────
-FROM node:26-trixie-slim AS base
-WORKDIR /app
+FROM diegosouzapw/omniroute:latest
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends libsecret-1-0 ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+USER root
 
-# ── Builder ────────────────────────────────────────────────────────────────
-FROM base AS builder
-ENV NEXT_TELEMETRY_DISABLED=1
-
-# Ultra-Fast Light Mode: Stub heavy frontend UI dashboard, compiling only the backend AI Proxy API
-ENV OMNIROUTE_BUILD_BACKEND_ONLY=1
-ENV OMNIROUTE_USE_TURBOPACK=0
-ENV OMNIROUTE_DISABLE_WEBPACK_WORKER=1
-ENV OMNIROUTE_MITM_STUB=1
-ARG OMNIROUTE_BUILD_WORKERS=1
-ENV CIRCLE_NODE_TOTAL=1
-ENV NODE_OPTIONS="--max-old-space-size=5120"
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
-
-COPY package*.json ./
-COPY open-sse/package.json ./open-sse/package.json
-COPY scripts/build/postinstall.mjs ./scripts/build/postinstall.mjs
-COPY scripts/build/postinstallSupport.mjs ./scripts/build/postinstallSupport.mjs
-COPY scripts/build/native-binary-compat.mjs ./scripts/build/native-binary-compat.mjs
-ENV NPM_CONFIG_LEGACY_PEER_DEPS=true
-
-RUN npm ci --include=optional --no-audit --no-fund --legacy-peer-deps --ignore-scripts \
-  && (cd node_modules/better-sqlite3 \
-      && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --jobs=max --force_build=1) \
-  && test -f node_modules/better-sqlite3/build/Release/better_sqlite3.node
-
-COPY . ./
-RUN mkdir -p /app/data \
-  && npm run build:backend
-
-# ── Production Runner (512MB Budget) ───────────────────────────────────────
-FROM base AS runner
-
-LABEL org.opencontainers.image.title="omniroute-render" \
-  org.opencontainers.image.description="OmniRoute AI Proxy optimized for Render 512MB + PostgreSQL"
+# Install postgres client for Render PostgreSQL backup/restore sync
+RUN npm install --no-audit --no-fund --legacy-peer-deps pg \
+  && chown -R node:node /app/node_modules/pg
 
 ENV NODE_ENV=production
 ENV PORT=10000
@@ -68,22 +30,14 @@ ENV KEEP_ALIVE=true
 ENV REQUIRE_API_KEY=false
 ENV OMNIROUTE_MIGRATIONS_DIR=/app/migrations
 
-RUN mkdir -p /app/data && chown node:node /app /app/data
+RUN mkdir -p /app/data && chown -R node:node /app /app/data
 
-# Standalone application bundle
-COPY --chown=node:node --from=builder /app/.build/next/standalone ./
-COPY --chown=node:node --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
-RUN test -f /app/node_modules/better-sqlite3/build/Release/better_sqlite3.node
-COPY --chown=node:node --from=builder /app/scripts/dev/healthcheck.mjs ./healthcheck.mjs
-
-# Render scripts & permission handler
-COPY --chown=node:node scripts/render/ ./scripts/render/
-COPY --chmod=755 scripts/check-permissions.sh /app/check-permissions.sh
+# Copy Render scripts
+COPY --chown=node:node scripts/render/ /app/scripts/render/
 
 EXPOSE 10000
 
 USER node
-ENTRYPOINT ["/app/check-permissions.sh"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD ["node", "healthcheck.mjs"]
