@@ -20,11 +20,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Ultra-Fast Light Mode: Stub heavy frontend UI dashboard, compiling only the backend AI Proxy API
 ENV OMNIROUTE_BUILD_BACKEND_ONLY=1
-ENV OMNIROUTE_USE_TURBOPACK=0
+ENV OMNIROUTE_USE_TURBOPACK=1
 ENV OMNIROUTE_MITM_STUB=1
 ARG OMNIROUTE_BUILD_WORKERS=1
 ENV CIRCLE_NODE_TOTAL=1
-ENV NODE_OPTIONS="--max-old-space-size=5120"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
